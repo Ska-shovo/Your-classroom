@@ -1,0 +1,1166 @@
+<!DOCTYPE html>
+<html lang="en" class="light">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Your Classroom - Pro Virtual Learning</title>
+    <!-- Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        brand: { 500: '#ff8c00', 600: '#e67e22', 900: '#d35400' }, // Mango Orange
+                        dark: { 900: '#0b1120', 800: '#111827', 700: '#1f2937' }, // Dark Blue
+                    }
+                }
+            }
+        }
+    </script>
+    <!-- FontAwesome -->
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- face-api.js (Stable CDN) -->
+    <script src="https://cdn.jsdelivr.net/npm/face-api.js@0.22.2/dist/face-api.min.js"></script>
+
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap');
+        
+        body { font-family: 'Inter', sans-serif; overflow-x: hidden; transition: background-color 0.3s, color 0.3s; }
+        body.light { background-color: #f3f4f6; color: #1f2937; }
+        body.dark { background-color: #0b1120; color: #f8fafc; }
+
+        .glass-card { backdrop-filter: blur(12px); border-radius: 1rem; transition: all 0.3s; }
+        .light .glass-card { background: rgba(255, 255, 255, 0.95); border: 1px solid rgba(229, 231, 235, 0.5); box-shadow: 0 10px 25px -5px rgba(0, 0, 0, 0.1); }
+        .dark .glass-card { background: linear-gradient(145deg, rgba(31,41,55,0.8) 0%, rgba(17,24,39,0.9) 100%); border: 1px solid rgba(255,255,255,0.05); box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5); }
+
+        ::-webkit-scrollbar { width: 6px; }
+        .light ::-webkit-scrollbar-track { background: #f3f4f6; }
+        .light ::-webkit-scrollbar-thumb { background: #cbd5e1; border-radius: 4px; }
+        .dark ::-webkit-scrollbar-track { background: #0b1120; }
+        .dark ::-webkit-scrollbar-thumb { background: #374151; border-radius: 4px; }
+
+        .loader { border: 3px solid rgba(156,163,175,0.2); border-top-color: #ff8c00; border-radius: 50%; width: 24px; height: 24px; animation: spin 1s linear infinite; }
+        @keyframes spin { to { transform: rotate(360deg); } }
+        
+        .badge-anim { animation: popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275) forwards; }
+        @keyframes popIn { 0% { transform: scale(0.5); opacity: 0; } 100% { transform: scale(1); opacity: 1; } }
+
+        .toast-enter { animation: slideInRight 0.3s ease-out forwards; }
+        .toast-leave { animation: fadeOut 0.3s ease-in forwards; }
+        @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } }
+        @keyframes fadeOut { to { opacity: 0; transform: translateY(-10px); } }
+
+        .video-container { position: relative; width: 100%; height: 100%; background: #000; border-radius: 0.75rem; overflow: hidden; }
+        .video-container video, .mirrored-image { width: 100%; height: 100%; object-fit: cover; transform: scaleX(-1); }
+        .video-container canvas { position: absolute; top: 0; left: 0; width: 100%; height: 100%; pointer-events: none; }
+        
+        .pulse-orange { animation: pulseOrange 2s infinite; }
+        @keyframes pulseOrange { 0% { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0.7); } 70% { box-shadow: 0 0 0 10px rgba(255, 140, 0, 0); } 100% { box-shadow: 0 0 0 0 rgba(255, 140, 0, 0); } }
+
+        .speaking-ring { box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.8), 0 0 15px rgba(34, 197, 94, 0.5); border-color: #22c55e !important; }
+        .participant-avatar { width: 80px; height: 80px; border-radius: 50%; object-fit: cover; border: 3px solid #e5e7eb; transition: all 0.3s ease; }
+        .dark .participant-avatar { border-color: #374151; background-color: #1f2937; }
+        
+        #whiteboard-canvas { background-color: #ffffff; cursor: crosshair; touch-action: none; border-radius: 0.75rem; pointer-events: auto !important; position: static !important; }
+        
+        .theme-bg-base { @apply bg-white dark:bg-dark-800; }
+        .theme-border { @apply border-gray-200 dark:border-gray-700; }
+        .theme-text-main { @apply text-gray-800 dark:text-gray-100; }
+        .theme-text-muted { @apply text-gray-500 dark:text-gray-400; }
+        .theme-input { @apply w-full bg-gray-50 dark:bg-dark-900 border border-gray-300 dark:border-gray-700 rounded-lg px-4 py-3 theme-text-main focus:outline-none focus:border-brand-500 transition-colors; }
+    </style>
+</head>
+<body class="h-screen flex flex-col light" id="main-body">
+
+    <!-- Global Theme Toggle -->
+    <button onclick="toggleTheme()" class="fixed top-6 right-6 z-50 w-12 h-12 rounded-full glass-card flex items-center justify-center text-xl shadow-lg hover:scale-110 transition theme-text-main">
+        <i id="theme-icon" class="fa-solid fa-moon"></i>
+    </button>
+
+    <div id="toast-container" class="fixed bottom-6 right-6 z-50 flex flex-col gap-3"></div>
+    <div id="modal-overlay" class="fixed inset-0 bg-black/60 backdrop-blur-sm z-[60] hidden flex items-center justify-center p-4">
+        <div id="modal-content" class="glass-card w-full max-w-md rounded-2xl p-6 shadow-2xl transform transition-all"></div>
+    </div>
+
+    <!-- MAIN APP CONTAINER -->
+    <div id="app" class="flex-1 w-full h-full flex items-center justify-center relative">
+        
+        <!-- ==================== AUTH VIEW ==================== -->
+        <div id="auth-view" class="w-full max-w-5xl grid md:grid-cols-2 gap-8 p-6 z-10">
+            <div class="col-span-full text-center mb-4">
+                <h1 class="text-5xl font-extrabold theme-text-main tracking-tight"><span class="text-brand-500">Your</span> Classroom</h1>
+                <p class="theme-text-muted mt-2">Next-Gen AI Powered Learning Platform</p>
+            </div>
+
+            <!-- Student Join Form -->
+            <div class="glass-card p-8 flex flex-col gap-6 relative overflow-hidden group">
+                <div class="absolute -top-10 -right-10 opacity-5 group-hover:scale-110 transition-transform duration-500"><i class="fa-solid fa-graduation-cap text-9xl text-brand-500"></i></div>
+                <h2 class="text-2xl font-bold theme-text-main z-10">Student Access</h2>
+                <form id="student-join-form" class="flex flex-col gap-4 z-10">
+                    <input type="text" id="student-name" required placeholder="Full Name" class="theme-input">
+                    <input type="text" id="student-roll" required placeholder="Student ID / Roll" class="theme-input">
+                    <input type="text" id="join-code" required placeholder="Class Code" class="theme-input uppercase tracking-widest font-mono font-bold">
+                    <button type="submit" id="st-join-btn" class="w-full bg-brand-500 hover:bg-brand-600 text-white font-semibold py-3 rounded-lg transition mt-2 flex justify-center items-center gap-2 shadow-lg shadow-brand-500/30">
+                        <span>Join Live Session</span> <i class="fa-solid fa-arrow-right"></i>
+                    </button>
+                    <div id="st-loading-indicator" class="hidden theme-text-main text-sm text-center flex flex-col items-center justify-center gap-3 mt-2">
+                        <div class="loader"></div> 
+                        <span id="st-loading-text">Initializing AI & Hardware...</span>
+                    </div>
+                </form>
+            </div>
+
+            <!-- Teacher Start Form -->
+            <div class="glass-card p-8 flex flex-col gap-6 relative overflow-hidden group">
+                <div class="absolute -top-10 -right-10 opacity-5 group-hover:scale-110 transition-transform duration-500"><i class="fa-solid fa-chalkboard-user text-9xl text-blue-500"></i></div>
+                <h2 class="text-2xl font-bold theme-text-main z-10">Teacher Dashboard</h2>
+                <form id="teacher-start-form" class="flex flex-col gap-4 z-10">
+                    <input type="text" id="course-name" required placeholder="Course Name (e.g., Higher Math)" class="theme-input">
+                    <input type="text" id="course-code" required placeholder="Course Code (e.g., MATH-201)" class="theme-input">
+                    <button type="submit" class="w-full bg-blue-600 hover:bg-blue-700 text-white font-semibold py-3 rounded-lg transition mt-2 flex justify-center items-center gap-2 shadow-lg shadow-blue-600/30">
+                        <span>Host Classroom</span> <i class="fa-solid fa-play"></i>
+                    </button>
+                </form>
+            </div>
+        </div>
+
+        <!-- ==================== TEACHER VIEW ==================== -->
+        <div id="teacher-view" class="hidden w-full h-full flex theme-bg-base">
+            <div class="w-64 theme-bg-base theme-border border-r flex flex-col z-10 shadow-xl">
+                <div class="p-6 theme-border border-b">
+                    <h1 class="text-xl font-bold text-brand-500 flex items-center gap-2"><i class="fa-solid fa-cube"></i> Your Classroom</h1>
+                    <p class="text-xs theme-text-muted mt-1 font-medium tracking-wide">TEACHER CONSOLE</p>
+                </div>
+                <nav class="flex-1 p-4 space-y-2 overflow-y-auto">
+                    <button class="w-full flex items-center gap-3 px-4 py-3 bg-brand-500/10 text-brand-600 dark:text-brand-400 rounded-lg font-medium transition t-nav-btn" data-target="live" onclick="switchTeacherTab('live')"><i class="fa-solid fa-tv w-5"></i> Presentation</button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 theme-text-muted hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg font-medium transition t-nav-btn" data-target="classroom" onclick="switchTeacherTab('classroom')">
+                        <i class="fa-solid fa-border-all w-5"></i> Live Grid 
+                        <span id="hand-raise-badge" class="ml-auto bg-brand-500 text-white text-[10px] px-2 py-0.5 rounded-full hidden">0</span>
+                    </button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 theme-text-muted hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg font-medium transition t-nav-btn" data-target="students" onclick="switchTeacherTab('students')"><i class="fa-solid fa-users-gear w-5"></i> Roster</button>
+                    <button class="w-full flex items-center gap-3 px-4 py-3 theme-text-muted hover:bg-gray-100 dark:hover:bg-dark-700 rounded-lg font-medium transition t-nav-btn" data-target="analytics" onclick="switchTeacherTab('analytics')"><i class="fa-solid fa-chart-pie w-5"></i> AI Analytics</button>
+                </nav>
+                <div class="p-4 theme-border border-t" id="teacher-sidebar-actions">
+                    <button id="end-class-btn" class="w-full py-3 bg-red-100 dark:bg-red-900/20 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white rounded-lg font-bold transition shadow-sm">End Class</button>
+                </div>
+            </div>
+
+            <div class="flex-1 flex flex-col h-full overflow-hidden relative bg-gray-50 dark:bg-dark-900">
+                <header class="h-16 theme-bg-base theme-border border-b flex justify-between items-center px-6 shadow-sm">
+                    <div class="flex items-center gap-4">
+                        <span class="bg-red-500 text-white text-[10px] font-bold px-2 py-1 rounded animate-pulse uppercase tracking-widest" id="live-indicator"><i class="fa-solid fa-circle text-[8px] mr-1"></i>Live</span>
+                        <h2 class="text-lg font-bold theme-text-main" id="teacher-class-title">Course Title</h2>
+                    </div>
+                    <div class="flex items-center gap-4" id="teacher-header-actions">
+                        <button id="btn-quick-poll" onclick="togglePoll()" class="px-4 py-1.5 bg-blue-100 dark:bg-blue-900/30 text-blue-600 dark:text-blue-400 rounded-lg text-sm font-semibold hover:bg-blue-200 transition"><i class="fa-solid fa-square-poll-vertical mr-1"></i> Quick Poll</button>
+                        <div class="text-sm theme-bg-base theme-border border px-4 py-1.5 rounded-lg flex items-center gap-2 shadow-sm">
+                            <span class="theme-text-muted font-medium">Join Code:</span>
+                            <span class="font-mono font-bold text-brand-500 tracking-widest text-lg" id="display-join-code">------</span>
+                        </div>
+                    </div>
+                </header>
+
+                <!-- TAB: Presentation -->
+                <div id="tab-live" class="flex-1 p-6 flex flex-col gap-6 overflow-y-auto">
+                    <div class="grid lg:grid-cols-3 gap-6 h-full">
+                        <div class="lg:col-span-2 flex flex-col gap-4">
+                            <div class="flex justify-between items-center bg-white dark:bg-dark-800 p-3 rounded-xl shadow-sm border theme-border">
+                                <h3 class="text-lg font-bold theme-text-main ml-2">Studio Controls</h3>
+                                <div class="flex gap-2">
+                                    <button onclick="startTeacherBroadcast('whiteboard')" id="t-btn-wb" class="px-4 py-2 bg-purple-100 dark:bg-purple-900/30 text-purple-700 dark:text-purple-400 hover:bg-purple-200 rounded-lg text-sm font-semibold transition"><i class="fa-solid fa-pen mr-1"></i> Smartboard</button>
+                                    <button onclick="startTeacherBroadcast('camera')" id="t-btn-cam" class="px-4 py-2 bg-gray-100 dark:bg-gray-700 theme-text-main hover:bg-gray-200 rounded-lg text-sm font-semibold transition"><i class="fa-solid fa-video mr-1"></i> Camera</button>
+                                    <button onclick="startTeacherBroadcast('screen')" id="t-btn-screen" class="px-4 py-2 bg-blue-100 dark:bg-blue-900/30 text-blue-700 dark:text-blue-400 hover:bg-blue-200 rounded-lg text-sm font-semibold transition"><i class="fa-solid fa-desktop mr-1"></i> Screen</button>
+                                    <button onclick="stopTeacherBroadcast()" id="t-btn-stop" class="px-4 py-2 bg-red-500 text-white rounded-lg text-sm font-bold transition hidden shadow-md"><i class="fa-solid fa-stop mr-1"></i> Stop</button>
+                                </div>
+                            </div>
+                            <div class="w-full h-[500px] bg-black rounded-2xl flex flex-col items-center justify-center relative shadow-2xl overflow-hidden border-4 border-gray-800">
+                                <div id="wb-controls" class="absolute top-4 left-4 z-20 hidden flex gap-2 bg-white/10 p-2 rounded-lg backdrop-blur-md">
+                                    <button onclick="clearWhiteboard()" class="px-3 py-1.5 bg-red-500 text-white text-xs font-bold rounded hover:bg-red-600 transition"><i class="fa-solid fa-trash mr-1"></i> Clear</button>
+                                    <button onclick="setWbColor('#ffffff')" class="w-6 h-6 rounded-full bg-white border-2 border-gray-400"></button>
+                                    <button onclick="setWbColor('#ff8c00')" class="w-6 h-6 rounded-full bg-brand-500 border-2 border-gray-400"></button>
+                                    <button onclick="setWbColor('#3b82f6')" class="w-6 h-6 rounded-full bg-blue-500 border-2 border-gray-400"></button>
+                                    <button onclick="setWbColor('#22c55e')" class="w-6 h-6 rounded-full bg-green-500 border-2 border-gray-400"></button>
+                                </div>
+                                <canvas id="whiteboard-canvas" class="hidden w-full h-full bg-[#1e1e1e]" width="1000" height="562"></canvas>
+                                <video id="teacher-preview-video" class="w-full h-full object-contain hidden" autoplay muted playsinline></video>
+                                <div id="teacher-placeholder" class="text-center absolute inset-0 flex flex-col items-center justify-center">
+                                    <i class="fa-solid fa-satellite-dish text-7xl text-gray-700 mb-6 block"></i>
+                                    <span class="text-gray-500 font-medium">Broadcast offline. Select an option above to go live.</span>
+                                </div>
+                            </div>
+                        </div>
+                        
+                        <!-- Teacher Chat -->
+                        <div class="lg:col-span-1 glass-card flex flex-col overflow-hidden shadow-md">
+                            <div class="p-4 theme-border border-b flex justify-between items-center bg-gray-50 dark:bg-dark-800">
+                                <span class="font-bold theme-text-main"><i class="fa-solid fa-comments text-brand-500 mr-2"></i> Q&A Activity</span>
+                            </div>
+                            <div class="flex-1 p-4 overflow-y-auto flex flex-col gap-3" id="teacher-chat-log"></div>
+                            <div class="p-4 theme-border border-t bg-gray-50 dark:bg-dark-800">
+                                <form id="teacher-chat-form" class="flex gap-2">
+                                    <input type="text" id="teacher-chat-input" class="theme-input text-sm" placeholder="Message class...">
+                                    <button type="submit" class="bg-brand-500 hover:bg-brand-600 text-white w-12 rounded-lg flex justify-center items-center shadow-md transition"><i class="fa-solid fa-paper-plane"></i></button>
+                                </form>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- TAB: Live Grid -->
+                <div id="tab-classroom" class="hidden flex-1 p-6 overflow-y-auto">
+                    <div class="flex justify-between items-center mb-6">
+                        <div>
+                            <h2 class="text-2xl font-bold theme-text-main">Live Classroom Monitoring</h2>
+                            <p class="theme-text-muted text-sm mt-1">Real-time engagement tracking. Grade verbal answers quickly.</p>
+                        </div>
+                        <div class="bg-white dark:bg-dark-800 px-4 py-2 rounded-lg theme-border border flex gap-4 text-sm shadow-sm font-semibold">
+                            <span class="text-blue-500"><i class="fa-solid fa-users mr-1"></i> <span id="hdr-total-st">0</span></span>
+                            <span class="text-green-500"><i class="fa-solid fa-hand mr-1"></i> <span id="hdr-hands">0</span></span>
+                        </div>
+                    </div>
+                    <div class="grid grid-cols-2 md:grid-cols-4 xl:grid-cols-5 gap-6" id="teacher-class-grid">
+                        <div class="col-span-full text-center theme-text-muted py-10 font-medium bg-white dark:bg-dark-800 rounded-xl border theme-border shadow-sm">No students currently in session.</div>
+                    </div>
+                </div>
+
+                <!-- TAB: Roster -->
+                <div id="tab-students" class="hidden flex-1 p-6 overflow-y-auto">
+                    <h2 class="text-2xl font-bold theme-text-main mb-6">Class Roster</h2>
+                    <div class="glass-card overflow-hidden shadow-md">
+                        <table class="w-full text-left border-collapse">
+                            <thead>
+                                <tr class="bg-gray-100 dark:bg-dark-800 theme-text-main text-sm uppercase tracking-wider font-bold">
+                                    <th class="p-4 theme-border border-b">Student Info</th>
+                                    <th class="p-4 theme-border border-b text-center">Status</th>
+                                    <th class="p-4 theme-border border-b text-center">Sensors</th>
+                                    <th class="p-4 theme-border border-b text-center">Engagement %</th>
+                                    <th class="p-4 theme-border border-b text-center">XP</th>
+                                    <th class="p-4 theme-border border-b text-right">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody id="student-list-body" class="divide-y theme-border text-sm">
+                                <tr><td colspan="6" class="p-8 text-center theme-text-muted">Awaiting enrollments...</td></tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </div>
+
+                <!-- TAB: Analytics (Pro Features) -->
+                <div id="tab-analytics" class="hidden flex-1 p-6 overflow-y-auto">
+                    <div id="analytics-ended-banner" class="bg-green-100 dark:bg-green-900/30 border border-green-200 dark:border-green-800 text-green-700 dark:text-green-400 px-4 py-3 rounded-xl mb-6 shadow-sm hidden items-center gap-3">
+                        <i class="fa-solid fa-circle-check text-xl"></i> 
+                        <span class="font-bold">Class session has ended. The final report is generated below.</span>
+                    </div>
+
+                    <h2 class="text-2xl font-extrabold theme-text-main mb-6 flex items-center gap-2"><i class="fa-solid fa-chart-line text-brand-500"></i> Class AI Report (Live)</h2>
+                    
+                    <div class="grid grid-cols-2 lg:grid-cols-4 gap-4 mb-8">
+                        <div class="glass-card p-6 flex items-center gap-4 shadow-sm border-l-4 border-l-brand-500">
+                            <div class="w-12 h-12 rounded-full bg-brand-100 dark:bg-brand-900/30 text-brand-500 flex items-center justify-center text-xl"><i class="fa-solid fa-users"></i></div>
+                            <div><span class="text-3xl font-black theme-text-main" id="ana-att-rate">0%</span><span class="text-xs theme-text-muted font-bold uppercase block mt-1">Attendance</span></div>
+                        </div>
+                        <div class="glass-card p-6 flex items-center gap-4 shadow-sm border-l-4 border-l-green-500">
+                            <div class="w-12 h-12 rounded-full bg-green-100 dark:bg-green-900/30 text-green-500 flex items-center justify-center text-xl"><i class="fa-solid fa-bolt"></i></div>
+                            <div><span class="text-3xl font-black theme-text-main" id="ana-eng-rate">0%</span><span class="text-xs theme-text-muted font-bold uppercase block mt-1">Avg Engagement</span></div>
+                        </div>
+                        <div class="glass-card p-6 flex items-center gap-4 shadow-sm border-l-4 border-l-blue-500">
+                            <div class="w-12 h-12 rounded-full bg-blue-100 dark:bg-blue-900/30 text-blue-500 flex items-center justify-center text-xl"><i class="fa-solid fa-square-poll-horizontal"></i></div>
+                            <div><span class="text-3xl font-black theme-text-main" id="ana-poll-acc">0%</span><span class="text-xs theme-text-muted font-bold uppercase block mt-1">Poll Accuracy</span></div>
+                        </div>
+                        <div class="glass-card p-6 flex items-center gap-4 shadow-sm border-l-4 border-l-red-500">
+                            <div class="w-12 h-12 rounded-full bg-red-100 dark:bg-red-900/30 text-red-500 flex items-center justify-center text-xl"><i class="fa-solid fa-triangle-exclamation"></i></div>
+                            <div><span class="text-3xl font-black theme-text-main" id="ana-at-risk">0</span><span class="text-xs theme-text-muted font-bold uppercase block mt-1">At-Risk Students</span></div>
+                        </div>
+                    </div>
+                    
+                    <div class="grid lg:grid-cols-3 gap-6">
+                        <div class="lg:col-span-2 glass-card p-6 shadow-sm">
+                            <h3 class="text-lg font-bold theme-text-main mb-4 flex items-center gap-2"><i class="fa-solid fa-ranking-star text-yellow-500"></i> Top Performers Leaderboard</h3>
+                            <div class="overflow-x-auto">
+                                <table class="w-full text-left text-sm">
+                                    <thead class="bg-gray-50 dark:bg-dark-800 theme-text-muted text-xs uppercase font-bold"><tr><th class="p-3 rounded-l-lg">Rank</th><th class="p-3">Student</th><th class="p-3 text-center">Engagement</th><th class="p-3 text-right rounded-r-lg">Total XP</th></tr></thead>
+                                    <tbody id="analytics-table-body" class="divide-y theme-border font-medium">
+                                        <tr><td colspan="4" class="text-center py-4 theme-text-muted">No data yet.</td></tr>
+                                    </tbody>
+                                </table>
+                            </div>
+                        </div>
+                        
+                        <div class="flex flex-col gap-6">
+                            <div class="glass-card p-6 shadow-sm bg-red-50 dark:bg-red-900/10 border-red-200 dark:border-red-900/50">
+                                <h3 class="text-lg font-bold text-red-600 dark:text-red-400 mb-2"><i class="fa-solid fa-bug"></i> Weak Topics (Based on Polls)</h3>
+                                <ul class="space-y-2 text-sm font-medium theme-text-main" id="ana-weak-topics">
+                                    <li class="text-gray-500">Need more poll data to evaluate.</li>
+                                </ul>
+                            </div>
+                            <div class="glass-card p-6 shadow-sm bg-blue-50 dark:bg-blue-900/10 border-blue-200 dark:border-blue-900/50">
+                                <h3 class="text-lg font-bold text-blue-600 dark:text-blue-400 mb-2"><i class="fa-solid fa-tasks"></i> Task Completion</h3>
+                                <div class="mt-4">
+                                    <div class="flex justify-between text-xs font-bold theme-text-muted mb-1"><span>Poll Participation</span><span id="ana-poll-part">0%</span></div>
+                                    <div class="w-full bg-blue-200 dark:bg-blue-900 rounded-full h-2.5"><div class="bg-blue-600 h-2.5 rounded-full" id="ana-poll-bar" style="width: 0%"></div></div>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Take Another Class Button -->
+                    <div id="take-another-class-wrapper" class="mt-8 justify-center border-t theme-border pt-6 pb-4 hidden">
+                        <button onclick="takeAnotherClass()" class="px-8 py-3.5 bg-brand-500 hover:bg-brand-600 text-white font-bold rounded-xl shadow-lg transition flex items-center gap-2 hover:scale-105">
+                            <i class="fa-solid fa-rotate-right"></i> Take Another Class
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- ==================== STUDENT VIEW ==================== -->
+        <div id="student-view" class="hidden w-full h-full flex flex-col theme-bg-base relative">
+            <!-- Disqualified Overlay -->
+            <div id="student-disqualified-overlay" class="absolute inset-0 bg-red-900/95 backdrop-blur-md z-50 hidden flex-col items-center justify-center p-6 text-center">
+                <i class="fa-solid fa-ban text-8xl text-red-400 mb-6 drop-shadow-lg"></i>
+                <h1 class="text-5xl font-black text-white mb-4 uppercase tracking-widest">Access Revoked</h1>
+                <p class="text-lg text-red-200 mb-8 max-w-lg font-medium" id="disqualify-reason">You have been removed due to multiple AI violations.</p>
+                <button onclick="requestRejoin()" class="bg-white text-red-900 hover:bg-gray-100 font-bold py-3 px-8 rounded-xl shadow-2xl transition-all hover:scale-105 flex items-center gap-2">
+                    <i class="fa-solid fa-hand-paper"></i> Request Readmission
+                </button>
+            </div>
+
+            <header class="h-16 glass-card rounded-none border-b flex justify-between items-center px-6 z-10 shadow-sm sticky top-0">
+                <div class="flex items-center gap-4">
+                    <div class="w-10 h-10 bg-brand-500 rounded-xl flex items-center justify-center font-bold text-white shadow-lg shadow-brand-500/40 text-xl"><i class="fa-solid fa-cube"></i></div>
+                    <div><h2 class="text-sm font-bold theme-text-main" id="st-class-name">Live Classroom</h2><p class="text-[10px] text-green-500 font-bold uppercase tracking-wider" id="st-connection-status"><i class="fa-solid fa-circle text-[8px] animate-pulse mr-1"></i>Connected</p></div>
+                </div>
+                
+                <div class="flex bg-gray-100 dark:bg-dark-900 rounded-xl p-1 shadow-inner border theme-border">
+                    <button class="px-5 py-1.5 text-sm font-bold rounded-lg bg-white dark:bg-dark-700 theme-text-main shadow-sm s-nav-btn transition" data-target="presentation" onclick="switchStudentTab('presentation')"><i class="fa-solid fa-tv mr-1"></i> Class</button>
+                    <button class="px-5 py-1.5 text-sm font-bold rounded-lg theme-text-muted hover:text-gray-800 dark:hover:text-white s-nav-btn transition" data-target="leaderboard" onclick="switchStudentTab('leaderboard')"><i class="fa-solid fa-trophy mr-1"></i> Leaderboard</button>
+                    <button class="px-5 py-1.5 text-sm font-bold rounded-lg theme-text-muted hover:text-gray-800 dark:hover:text-white s-nav-btn transition" data-target="profile" onclick="switchStudentTab('profile')"><i class="fa-solid fa-user-astronaut mr-1"></i> Profile</button>
+                </div>
+
+                <div class="flex items-center gap-4">
+                    <div class="hidden md:flex bg-yellow-100 dark:bg-yellow-900/30 px-4 py-1.5 rounded-xl border border-yellow-200 dark:border-yellow-700/50 items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-star text-yellow-500"></i>
+                        <div class="flex flex-col"><span class="text-[9px] text-yellow-600 dark:text-yellow-400 font-bold uppercase leading-none">Total XP</span><span id="st-xp-display" class="theme-text-main font-black text-sm leading-none">0</span></div>
+                    </div>
+                    <div class="hidden md:flex bg-blue-100 dark:bg-blue-900/30 px-4 py-1.5 rounded-xl border border-blue-200 dark:border-blue-700/50 items-center gap-2 shadow-sm">
+                        <i class="fa-solid fa-fire text-blue-500"></i>
+                        <div class="flex flex-col"><span class="text-[9px] text-blue-600 dark:text-blue-400 font-bold uppercase leading-none">Engagement</span><span id="st-eng-display" class="theme-text-main font-black text-sm leading-none">0%</span></div>
+                    </div>
+                    <button id="btn-student-leave" class="bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white px-4 py-2 rounded-xl text-sm font-bold transition shadow-sm" onclick="leaveClassroom()"><i class="fa-solid fa-arrow-right-from-bracket"></i></button>
+                </div>
+            </header>
+
+            <div class="flex-1 flex overflow-hidden p-4 gap-4 relative bg-gray-50 dark:bg-[#050810]">
+                
+                <!-- Center Work Area -->
+                <div class="flex-1 flex flex-col relative overflow-hidden gap-4">
+                    
+                    <!-- TAB: Presentation -->
+                    <div id="s-tab-presentation" class="w-full h-full flex flex-col items-center justify-center bg-gray-900 rounded-2xl relative shadow-2xl border border-gray-700 overflow-hidden">
+                        <div class="w-full h-full flex items-center justify-center bg-black/50">
+                            <img id="receive-teacher-frame" class="w-full h-full object-contain hidden" />
+                        </div>
+                        <div id="receive-teacher-placeholder" class="text-center absolute z-10">
+                            <i class="fa-solid fa-chalkboard text-7xl text-gray-600 mb-4 drop-shadow-md block"></i>
+                            <h2 class="text-xl font-bold text-gray-400">Waiting for Broadcast...</h2>
+                            <p class="text-sm text-gray-500 mt-2">Class materials will appear here.</p>
+                        </div>
+
+                        <!-- Floating Action Bar for Students -->
+                        <div id="student-action-bar" class="absolute bottom-6 left-1/2 transform -translate-x-1/2 glass-card px-4 py-3 rounded-2xl flex gap-3 shadow-2xl z-20 items-center border border-white/20">
+                            <button id="st-hand-btn" onclick="toggleHandRaise()" class="w-12 h-12 rounded-xl bg-yellow-500 text-white hover:bg-yellow-400 flex items-center justify-center transition shadow-lg tooltip relative" title="Raise Hand">
+                                <i class="fa-solid fa-hand"></i>
+                            </button>
+                            <div class="w-px h-8 bg-gray-400/50 mx-1"></div>
+                            <button id="st-cam-btn" onclick="toggleStudentCam()" class="w-12 h-12 rounded-xl bg-gray-700 hover:bg-gray-600 flex items-center justify-center text-white transition shadow-lg tooltip" title="Toggle Camera"><i class="fa-solid fa-video"></i></button>
+                            <button id="st-mic-btn" onclick="toggleStudentMic()" class="w-12 h-12 rounded-xl bg-red-500 hover:bg-red-400 flex items-center justify-center text-white transition shadow-lg tooltip" title="Toggle Microphone"><i class="fa-solid fa-microphone-slash"></i></button>
+                            <button onclick="requestCameraExemption()" id="btn-request-exempt" class="w-12 h-12 rounded-xl bg-blue-600 hover:bg-blue-500 flex items-center justify-center text-white transition shadow-lg tooltip" title="Request Cam Off">
+                                <i class="fa-solid fa-video-slash"></i>
+                            </button>
+                        </div>
+                    </div>
+
+                    <!-- TAB: Leaderboard -->
+                    <div id="s-tab-leaderboard" class="hidden w-full h-full overflow-y-auto p-6 glass-card shadow-lg">
+                        <div class="text-center mb-8">
+                            <i class="fa-solid fa-trophy text-6xl text-yellow-500 mb-4 drop-shadow-md"></i>
+                            <h2 class="text-3xl font-black theme-text-main">Class Leaderboard</h2>
+                            <p class="theme-text-muted">Earn XP by participating in chat, polls, and keeping your camera on!</p>
+                        </div>
+                        <div class="max-w-2xl mx-auto bg-gray-50 dark:bg-dark-900 rounded-2xl border theme-border overflow-hidden shadow-inner">
+                            <ul id="st-leaderboard-list" class="divide-y theme-border">
+                                <li class="p-8 text-center theme-text-muted font-medium">Loading leaderboard...</li>
+                            </ul>
+                        </div>
+                    </div>
+
+                    <!-- TAB: Personal Profile & History -->
+                    <div id="s-tab-profile" class="hidden w-full h-full overflow-y-auto p-6 glass-card shadow-lg">
+                        <div class="flex items-center gap-6 mb-8">
+                            <img src="https://api.dicebear.com/7.x/avataaars/svg?seed=student" class="w-24 h-24 rounded-full bg-brand-100 border-4 border-brand-500 shadow-lg p-2">
+                            <div>
+                                <h2 class="text-3xl font-black theme-text-main" id="prof-name">Student Name</h2>
+                                <p class="theme-text-muted text-lg font-medium">ID: <span id="prof-roll">---</span></p>
+                                <div class="flex gap-2 mt-2" id="prof-badges">
+                                    <!-- Badges inject here -->
+                                </div>
+                            </div>
+                        </div>
+
+                        <div class="grid grid-cols-2 gap-4 mb-8">
+                            <div class="bg-gradient-to-br from-yellow-400 to-orange-500 p-6 rounded-2xl text-white shadow-lg">
+                                <span class="text-sm font-bold uppercase tracking-wider opacity-80">Lifetime XP</span>
+                                <h3 class="text-4xl font-black mt-1" id="prof-total-xp">0</h3>
+                            </div>
+                            <div class="bg-gradient-to-br from-blue-500 to-indigo-600 p-6 rounded-2xl text-white shadow-lg">
+                                <span class="text-sm font-bold uppercase tracking-wider opacity-80">Classes Attended</span>
+                                <h3 class="text-4xl font-black mt-1" id="prof-total-classes">0</h3>
+                            </div>
+                        </div>
+
+                        <h3 class="text-xl font-bold theme-text-main mb-4 border-b theme-border pb-2">Session History</h3>
+                        <div class="bg-gray-50 dark:bg-dark-900 rounded-xl border theme-border overflow-hidden shadow-sm">
+                            <table class="w-full text-left text-sm">
+                                <thead class="bg-gray-100 dark:bg-dark-800 theme-text-muted text-xs uppercase font-bold">
+                                    <tr><th class="p-4">Date</th><th class="p-4">Class Code</th><th class="p-4 text-center">Engagement</th><th class="p-4 text-right">XP Earned</th></tr>
+                                </thead>
+                                <tbody id="prof-history-list" class="divide-y theme-border font-medium theme-text-main">
+                                    <tr><td colspan="4" class="p-6 text-center text-gray-500">No past classes found on this device.</td></tr>
+                                </tbody>
+                            </table>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Right Sidebar (AI & Social) -->
+                <div class="w-[340px] flex flex-col gap-4 transition-opacity duration-300" id="student-sidebar">
+                    <!-- AI Sensor Widget -->
+                    <div class="glass-card p-3 shadow-lg border-t-4 border-brand-500 flex flex-col relative group">
+                        <div class="flex justify-between items-center mb-2 px-1">
+                            <span class="text-xs font-bold theme-text-main uppercase tracking-wider flex items-center gap-1"><i class="fa-solid fa-microchip text-brand-500"></i> AI Monitor</span>
+                            <span id="ai-status-badge" class="text-[9px] bg-gray-200 dark:bg-gray-700 theme-text-muted px-2 py-0.5 rounded-full font-bold uppercase">Loading...</span>
+                        </div>
+                        <div class="video-container h-44 rounded-xl border-2 border-gray-300 dark:border-gray-700 transition-colors shadow-inner" id="st-video-container">
+                            <video id="st-webcam" autoplay muted playsinline class="mirror-image"></video>
+                            <canvas id="st-overlay"></canvas>
+                            <div id="st-cam-overlay" class="absolute inset-0 bg-gray-900/90 backdrop-blur-sm flex flex-col items-center justify-center text-white hidden z-10 transition-all">
+                                <i class="fa-solid fa-video-slash text-4xl mb-3 drop-shadow-md"></i>
+                                <span class="text-xs font-bold text-center px-4 bg-red-500/20 text-red-300 py-1 rounded-full border border-red-500/50" id="st-overlay-msg">Camera OFF<br>XP Loss Active</span>
+                            </div>
+                        </div>
+                        <!-- Mini warning dots -->
+                        <div class="flex justify-center gap-1 mt-2">
+                            <div id="warn-1" class="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 transition-colors duration-300"></div>
+                            <div id="warn-2" class="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 transition-colors duration-300"></div>
+                            <div id="warn-3" class="w-2 h-2 rounded-full bg-gray-300 dark:bg-gray-600 transition-colors duration-300"></div>
+                        </div>
+                    </div>
+
+                    <!-- Chat & Social Widget -->
+                    <div class="flex-1 glass-card flex flex-col overflow-hidden shadow-lg border-t-4 border-blue-500">
+                        <div class="p-3 theme-border border-b bg-gray-50 dark:bg-dark-800 flex justify-between items-center">
+                            <span class="text-sm font-bold theme-text-main"><i class="fa-solid fa-comments text-blue-500 mr-1"></i> Class Discussion</span>
+                            <span class="text-[10px] bg-blue-100 text-blue-600 dark:bg-blue-900/50 dark:text-blue-400 px-2 py-0.5 rounded-full font-bold">+2 XP per Msg</span>
+                        </div>
+                        <div class="flex-1 p-3 overflow-y-auto flex flex-col gap-3 text-sm bg-white dark:bg-transparent" id="student-chat-log"></div>
+                        <div class="p-3 theme-border border-t bg-gray-50 dark:bg-dark-800">
+                            <form id="student-chat-form" class="flex gap-2 relative">
+                                <input type="text" id="student-chat-input" class="theme-input text-sm pr-12" placeholder="Share your thoughts...">
+                                <button type="submit" class="absolute right-1 top-1 bottom-1 bg-brand-500 hover:bg-brand-600 w-10 rounded-lg flex justify-center items-center text-white transition shadow-sm"><i class="fa-solid fa-paper-plane text-xs"></i></button>
+                            </form>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Teacher Poll Setup Modal -->
+    <div id="teacher-poll-modal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-lg p-6 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-4 theme-text-main flex items-center gap-2"><i class="fa-solid fa-square-poll-vertical text-brand-500"></i> Create Custom Poll</h2>
+            <div class="mb-4">
+                <label class="text-sm font-bold theme-text-muted mb-1 block">Question (Optional)</label>
+                <input type="text" id="poll-setup-q" placeholder="What is the capital of Bangladesh?" class="theme-input">
+            </div>
+            <label class="text-sm font-bold theme-text-muted mb-1 block">Options</label>
+            <div class="grid grid-cols-2 gap-3 mb-4">
+                <input type="text" id="poll-setup-a" placeholder="A" class="theme-input text-sm font-medium" value="A">
+                <input type="text" id="poll-setup-b" placeholder="B" class="theme-input text-sm font-medium" value="B">
+                <input type="text" id="poll-setup-c" placeholder="C" class="theme-input text-sm font-medium" value="C">
+                <input type="text" id="poll-setup-d" placeholder="D" class="theme-input text-sm font-medium" value="D">
+            </div>
+            <label class="text-sm font-bold theme-text-muted mb-1 block">Settings</label>
+            <select id="poll-setup-ans" class="theme-input mb-6 font-medium">
+                <option value="none">Anonymous / Opinion (No Correct Ans)</option>
+                <option value="A">Option A is the Correct Answer</option>
+                <option value="B">Option B is the Correct Answer</option>
+                <option value="C">Option C is the Correct Answer</option>
+                <option value="D">Option D is the Correct Answer</option>
+            </select>
+            <div class="flex gap-3 justify-end">
+                <button onclick="closePollSetup()" class="px-5 py-2.5 rounded-lg bg-gray-200 dark:bg-gray-700 hover:bg-gray-300 dark:hover:bg-gray-600 theme-text-main font-bold transition">Cancel</button>
+                <button onclick="startCustomPoll()" class="px-5 py-2.5 rounded-lg bg-brand-500 text-white font-bold hover:bg-brand-600 shadow-md transition">Launch Poll</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Active Poll Overlay Modal (For Students) -->
+    <div id="poll-modal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md p-8 shadow-2xl transform scale-95 transition-all text-center relative overflow-hidden">
+            <div id="poll-options-container">
+                <div class="w-16 h-16 bg-blue-500 text-white rounded-full flex items-center justify-center text-3xl mx-auto mb-4 shadow-lg animate-bounce"><i class="fa-solid fa-square-poll-vertical"></i></div>
+                <h2 class="text-2xl font-black theme-text-main mb-2">Pop Quiz!</h2>
+                <p id="poll-q-text" class="theme-text-muted mb-6 font-medium text-lg">Question appears here...</p>
+                <div class="grid grid-cols-2 gap-4">
+                    <button onclick="submitPoll('A')" id="btn-opt-A" class="py-4 bg-white dark:bg-dark-800 hover:bg-brand-50 dark:hover:bg-brand-900/30 border-2 border-gray-200 dark:border-gray-700 hover:border-brand-500 rounded-xl font-bold text-lg theme-text-main transition shadow-sm break-words px-2 leading-tight">A</button>
+                    <button onclick="submitPoll('B')" id="btn-opt-B" class="py-4 bg-white dark:bg-dark-800 hover:bg-brand-50 dark:hover:bg-brand-900/30 border-2 border-gray-200 dark:border-gray-700 hover:border-brand-500 rounded-xl font-bold text-lg theme-text-main transition shadow-sm break-words px-2 leading-tight">B</button>
+                    <button onclick="submitPoll('C')" id="btn-opt-C" class="py-4 bg-white dark:bg-dark-800 hover:bg-brand-50 dark:hover:bg-brand-900/30 border-2 border-gray-200 dark:border-gray-700 hover:border-brand-500 rounded-xl font-bold text-lg theme-text-main transition shadow-sm break-words px-2 leading-tight">C</button>
+                    <button onclick="submitPoll('D')" id="btn-opt-D" class="py-4 bg-white dark:bg-dark-800 hover:bg-brand-50 dark:hover:bg-brand-900/30 border-2 border-gray-200 dark:border-gray-700 hover:border-brand-500 rounded-xl font-bold text-lg theme-text-main transition shadow-sm break-words px-2 leading-tight">D</button>
+                </div>
+            </div>
+            <div id="poll-waiting-msg" class="hidden flex-col items-center justify-center py-10">
+                <div class="loader mb-4"></div>
+                <h3 class="text-xl font-bold theme-text-main">Answer Recorded!</h3>
+                <p class="theme-text-muted mt-2">Waiting for teacher to end the poll and show results...</p>
+            </div>
+        </div>
+    </div>
+
+    <!-- Poll Results Modal -->
+    <div id="poll-results-modal" class="fixed inset-0 bg-black/70 backdrop-blur-md z-[70] hidden flex items-center justify-center p-4">
+        <div class="glass-card w-full max-w-md p-6 shadow-2xl">
+            <h2 class="text-2xl font-black mb-2 theme-text-main text-center flex items-center justify-center gap-2"><i class="fa-solid fa-chart-bar text-brand-500"></i> Poll Results</h2>
+            <p id="poll-res-q-text" class="text-center theme-text-muted font-medium mb-4">Question</p>
+            <div id="poll-results-content" class="flex flex-col gap-4 my-6">
+                <!-- Bars injected here dynamically -->
+            </div>
+            <button onclick="closePollResults()" class="w-full py-3 bg-brand-500 hover:bg-brand-600 transition text-white rounded-xl font-bold shadow-md">Close Results</button>
+        </div>
+    </div>
+
+    <script>
+        // ================= GLOBALS & STATE =================
+        let isWhiteboardActive = false; const wbCanvas = document.getElementById('whiteboard-canvas');
+        const ctxWb = wbCanvas ? wbCanvas.getContext('2d') : null; let isDrawing = false; let wbColor = '#ffffff';
+
+        // ================= THEME MANAGEMENT =================
+        function toggleTheme() {
+            const body = document.getElementById('main-body');
+            const icon = document.getElementById('theme-icon');
+            if (body.classList.contains('light')) {
+                body.classList.replace('light', 'dark'); icon.className = 'fa-solid fa-sun';
+            } else {
+                body.classList.replace('dark', 'light'); icon.className = 'fa-solid fa-moon';
+            }
+        }
+
+        // ================= INIT =================
+        window.onload = () => {
+            const activeCode = localStorage.getItem('activeClassCode');
+            if(activeCode && document.getElementById('join-code')) document.getElementById('join-code').value = activeCode;
+            setupWhiteboard();
+            loadStudentProfileHistory();
+        }
+
+        // ================= WHITEBOARD FUNCTIONS =================
+        function setupWhiteboard() {
+            if(!ctxWb || !wbCanvas) return;
+            ctxWb.lineCap = 'round'; ctxWb.lineJoin = 'round'; ctxWb.lineWidth = 4;
+            setWbColor('#ffffff'); 
+            
+            const startDraw = (e) => { isDrawing = true; draw(e); }
+            const stopDraw = () => { isDrawing = false; ctxWb.beginPath(); }
+            const draw = (e) => {
+                if(!isDrawing) return;
+                const rect = wbCanvas.getBoundingClientRect();
+                const scaleX = wbCanvas.width / rect.width; const scaleY = wbCanvas.height / rect.height;
+                let clientX = e.clientX || (e.touches && e.touches[0].clientX); let clientY = e.clientY || (e.touches && e.touches[0].clientY);
+                
+                ctxWb.lineTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY); ctxWb.stroke();
+                ctxWb.beginPath(); ctxWb.moveTo((clientX - rect.left) * scaleX, (clientY - rect.top) * scaleY);
+            }
+            wbCanvas.addEventListener('mousedown', startDraw); wbCanvas.addEventListener('mousemove', draw); wbCanvas.addEventListener('mouseup', stopDraw); wbCanvas.addEventListener('mouseout', stopDraw);
+            wbCanvas.addEventListener('touchstart', (e) => { e.preventDefault(); startDraw(e); }, {passive: false});
+            wbCanvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); }, {passive: false});
+            wbCanvas.addEventListener('touchend', stopDraw);
+        }
+        function clearWhiteboard() { if(!ctxWb || !wbCanvas) return; ctxWb.fillStyle = '#1e1e1e'; ctxWb.fillRect(0, 0, wbCanvas.width, wbCanvas.height); ctxWb.beginPath(); }
+        function setWbColor(color) { wbColor = color; if(ctxWb) ctxWb.strokeStyle = color; }
+
+        // ================= STATE MANAGEMENT =================
+        const AppState = {
+            role: null, roomCode: '', courseName: '', startTime: 0,
+            me: { 
+                id: '', name: '', roll: '', points: 0, violations: 0, 
+                camOn: true, micOn: false, faceDetected: false, 
+                status: 'active', isSpeaking: false, exempt: false,
+                handRaised: false, pollsAnswered: 0, chatMessages: 0, engagement: 0
+            },
+            students: new Map(),
+            classStats: { totalPolls: 0, pollAnswers: [], chatCount: 0 },
+            activePoll: { isActive: false, question: '', options: {A:'', B:'', C:'', D:''}, correctAns: 'none', votes: {A:0, B:0, C:0, D:0}, totalVotes: 0 }
+        };
+
+        const MAX_VIOLATIONS = 3;
+        
+        let localMediaStream = null; let audioContext = null; let analyser = null;
+        let faceDetectionInterval = null; let faceMissingTimer = null; let pointLoopInterval = null;
+        let broadcastInterval = null; let audioLevelInterval = null; let heartbeatInterval = null;
+        let isAiLoaded = false; let isBroadcasting = false;
+        
+        const authView = document.getElementById('auth-view');
+        const teacherView = document.getElementById('teacher-view');
+        const studentView = document.getElementById('student-view');
+
+        // ================= DUAL-BUS COMM SYSTEM =================
+        const channel = new BroadcastChannel('your-classroom-final-realtime');
+        const processedMsgs = new Set();
+
+        function sendMsg(type, payload) {
+            const msgObj = { type, payload, _sender: AppState.me.id || AppState.role, _t: Date.now() + Math.random() };
+            try { channel.postMessage(msgObj); } catch(e){}
+            try { localStorage.setItem('yc_bus', JSON.stringify(msgObj)); setTimeout(() => localStorage.removeItem('yc_bus'), 50); } catch(e) { if(e.name === 'QuotaExceededError') localStorage.clear(); }
+        }
+
+        channel.onmessage = (e) => routeMessage(e.data);
+        window.addEventListener('storage', (e) => {
+            if (e.key === 'yc_bus' && e.newValue) { try { routeMessage(JSON.parse(e.newValue)); } catch(err){} }
+        });
+
+        function routeMessage(data) {
+            if(!data || !data._t) return;
+            const msgId = data._t + '_' + data._sender;
+            if(processedMsgs.has(msgId)) return;
+            processedMsgs.add(msgId);
+            setTimeout(() => processedMsgs.delete(msgId), 5000);
+
+            const { type, payload } = data;
+            
+            if (type === 'CHAT_MSG') {
+                renderChatMessage(payload.senderId, payload.sender, payload.text, payload.role);
+                if(AppState.role === 'teacher') AppState.classStats.chatCount++;
+            }
+            if (type === 'FORCE_SYNC_REQ') { if(AppState.me.status === 'active') syncStudentState(); }
+            if (type === 'CLASS_ENDED_CMD') {
+                if (AppState.role === 'student') handleStudentClassEnded();
+            }
+            
+            if (AppState.role === 'student') {
+                if (type === 'TEACHER_FRAME') updateTeacherPresentationFrame(payload.image);
+                if (type === 'TEACHER_STOPPED') clearTeacherPresentationFrame();
+                if (type === 'TEACHER_JOINED') syncStudentState();
+                if (type === 'POLL_START') handlePollStart(payload);
+                if (type === 'POLL_RESULTS') handlePollResults(payload);
+                if (type === 'TEACHER_CMD' && payload.targetId === AppState.me.id) {
+                    if (payload.action === 'KICK') triggerDisqualification(payload.reason);
+                    if (payload.action === 'REJOIN_APPROVED') handleRejoinApproved();
+                    if (payload.action === 'REJOIN_DENIED') document.getElementById('disqualify-reason').innerText = "Request Denied by Teacher.";
+                    if (payload.action === 'AWARD_POINTS') handlePointsAwarded(payload.points);
+                    if (payload.action === 'EXEMPT_APPROVED') { AppState.me.exempt = true; showToast('success', 'Camera exemption approved.'); syncStudentState(); }
+                    if (payload.action === 'EXEMPT_DENIED') showToast('error', 'Camera exemption denied.');
+                }
+                if (type === 'STUDENT_SYNC' && payload.id !== AppState.me.id) { AppState.students.set(payload.id, payload); updateLeaderboard(); }
+                if (type === 'STUDENT_FRAME' && payload.id !== AppState.me.id) updateStudentGridFrame(payload.id, payload.image);
+                if (type === 'HAND_RAISE_SYNC' && payload.id !== AppState.me.id) { const st = AppState.students.get(payload.id); if(st) st.handRaised = payload.status; }
+            }
+
+            if (AppState.role === 'teacher') {
+                if (type === 'STUDENT_SYNC') handleStudentSync(payload);
+                if (type === 'STUDENT_LEAVE') handleStudentLeave(payload);
+                if (type === 'REJOIN_REQUEST') handleRejoinRequest(payload);
+                if (type === 'EXEMPT_REQUEST') handleExemptRequest(payload);
+                if (type === 'STUDENT_FRAME') {
+                    const st = AppState.students.get(payload.id);
+                    if(st) st.lastFrame = payload.image; 
+                    updateStudentGridFrame(payload.id, payload.image);
+                }
+                if (type === 'POLL_VOTE') handlePollVote(payload);
+                if (type === 'HAND_RAISE_SYNC') {
+                    const st = AppState.students.get(payload.id);
+                    if(st) { st.handRaised = payload.status; updateClassroomGrid(); updateTeacherCounters(); if(payload.status) showToast('info', `${st.name} raised hand!`); }
+                }
+            }
+        }
+
+        // ================= TEACHER DASHBOARD ANALYTICS (REAL-TIME) =================
+        function updateAnalyticsDashboard() {
+            if (AppState.role !== 'teacher') return;
+            const tbody = document.getElementById('analytics-table-body');
+            tbody.innerHTML = '';
+            
+            let total = AppState.students.size, active = 0, violations = 0, disqualified = 0, sumEng = 0; 
+            let stArr = Array.from(AppState.students.values());
+            stArr.sort((a, b) => b.points - a.points); 
+            
+            if(stArr.length > 0 && stArr[0].points > 0) document.getElementById('ana-best').innerText = stArr[0].name;
+            else document.getElementById('ana-best').innerText = 'N/A';
+
+            let atRiskCount = 0;
+            stArr.forEach((st, index) => {
+                if(st.status === 'active') active++; else if(st.status === 'disqualified') disqualified++;
+                violations += st.violations; sumEng += st.engagement || 0;
+                if(st.engagement < 40 && st.status === 'active') atRiskCount++;
+                let rankTpl = (index === 0) ? '🥇 1st' : (index === 1) ? '🥈 2nd' : (index === 2) ? '🥉 3rd' : index + 1 + 'th';
+                tbody.innerHTML += `<tr><td class="p-3 font-black text-brand-500">${rankTpl}</td><td class="p-3 font-bold theme-text-main">${st.name}</td><td class="p-3 text-center"><span class="bg-gray-100 dark:bg-dark-700 px-2 py-1 rounded-md text-xs font-bold">${Math.round(st.engagement || 0)}%</span></td><td class="p-3 text-right text-brand-500 font-black">${Math.round(st.points || 0)} XP</td></tr>`;
+            });
+            if(stArr.length === 0) tbody.innerHTML = `<tr><td colspan="4" class="text-center py-4 theme-text-muted">No data yet.</td></tr>`;
+            
+            let avgEng = total > 0 ? sumEng / total : 0; 
+            let attRate = total > 0 ? ((total - disqualified) / total) * 100 : 0;
+            let pollAcc = 0; 
+            
+            if(AppState.classStats.totalPolls > 0 && AppState.activePoll && AppState.activePoll.correctAns !== 'none') { 
+                let correct = AppState.classStats.pollAnswers.filter(a => a === AppState.activePoll.correctAns).length; 
+                pollAcc = AppState.classStats.pollAnswers.length > 0 ? (correct / AppState.classStats.pollAnswers.length) * 100 : 0; 
+            }
+
+            document.getElementById('ana-total').innerText = total; 
+            document.getElementById('ana-att-rate').innerText = `${Math.round(attRate)}%`;
+            document.getElementById('ana-eng-rate').innerText = `${Math.round(avgEng)}%`; 
+            document.getElementById('ana-poll-acc').innerText = `${Math.round(pollAcc)}%`; 
+            document.getElementById('ana-at-risk').innerText = atRiskCount;
+            
+            let expPollAnswers = total * AppState.classStats.totalPolls; 
+            let partRate = expPollAnswers > 0 ? (AppState.classStats.pollAnswers.length / expPollAnswers) * 100 : 0;
+            document.getElementById('ana-poll-part').innerText = `${Math.round(partRate)}%`; 
+            document.getElementById('ana-poll-bar').style.width = `${Math.round(partRate)}%`;
+
+            const topicsList = document.getElementById('ana-weak-topics');
+            if(pollAcc < 60 && AppState.classStats.totalPolls > 0) {
+                topicsList.innerHTML = `<li class="flex items-center gap-2"><i class="fa-solid fa-circle-exclamation text-red-500"></i> Concepts from Recent Polls (Low accuracy)</li>
+                <li class="flex items-center gap-2"><i class="fa-solid fa-circle-exclamation text-red-500"></i> General Attention (Engagement < 60%)</li>`;
+            } else if (AppState.classStats.totalPolls > 0) {
+                topicsList.innerHTML = `<li class="text-green-600 dark:text-green-400 font-bold"><i class="fa-solid fa-check-circle"></i> Class performing well!</li>`;
+            } else {
+                topicsList.innerHTML = `<li class="text-gray-500">Need more poll data to evaluate.</li>`;
+            }
+        }
+
+        // ================= AUTHENTICATION FLOW =================
+        document.getElementById('teacher-start-form').addEventListener('submit', (e) => {
+            e.preventDefault();
+            const joinCode = Math.random().toString(36).substring(2, 8).toUpperCase();
+            AppState.role = 'teacher'; AppState.me.id = 'TEACHER_1'; AppState.me.name = 'Instructor'; 
+            AppState.roomCode = joinCode; AppState.courseName = document.getElementById('course-name').value; AppState.startTime = Date.now();
+            localStorage.setItem('activeClassCode', joinCode);
+            document.getElementById('display-join-code').innerText = joinCode;
+            document.getElementById('teacher-class-title').innerText = `${AppState.courseName} (${document.getElementById('course-code').value})`;
+            authView.classList.add('hidden'); teacherView.classList.remove('hidden');
+            showToast('success', 'Class Created! Code: ' + joinCode);
+            sendMsg('TEACHER_JOINED', { roomCode: joinCode }); sendMsg('FORCE_SYNC_REQ', {});
+        });
+
+        document.getElementById('student-join-form').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const btn = document.getElementById('st-join-btn'), loader = document.getElementById('st-loading-indicator');
+            const code = document.getElementById('join-code').value.toUpperCase(), activeCode = localStorage.getItem('activeClassCode');
+            if(activeCode && code !== activeCode) { showToast('error', 'Invalid Join Code!'); return; }
+            btn.classList.add('hidden'); loader.classList.remove('hidden');
+
+            AppState.role = 'student'; AppState.roomCode = code; AppState.startTime = Date.now();
+            AppState.me.id = 'ST_' + Math.random().toString(36).substr(2, 9);
+            AppState.me.name = document.getElementById('student-name').value; AppState.me.roll = document.getElementById('student-roll').value;
+
+            const started = await startStudentSystems();
+            if(!started) { btn.classList.remove('hidden'); loader.classList.add('hidden'); return; }
+
+            authView.classList.add('hidden'); studentView.classList.remove('hidden');
+            document.getElementById('prof-name').innerText = AppState.me.name; document.getElementById('prof-roll').innerText = AppState.me.roll;
+            showToast('success', 'Successfully joined!');
+            syncStudentState(); setTimeout(syncStudentState, 500); 
+            heartbeatInterval = setInterval(() => { if (AppState.me.status === 'active') syncStudentState(); }, 2500);
+        });
+
+        // ================= TEACHER LOGIC =================
+        async function startTeacherBroadcast(type) {
+            try {
+                if(localMediaStream) localMediaStream.getTracks().forEach(t => t.stop());
+                const video = document.getElementById('teacher-preview-video'), placeholder = document.getElementById('teacher-placeholder'), wbCtrls = document.getElementById('wb-controls');
+                isWhiteboardActive = (type === 'whiteboard');
+                
+                if(type === 'camera' || type === 'screen') {
+                    wbCanvas.classList.add('hidden'); wbCtrls.classList.add('hidden');
+                    localMediaStream = await navigator.mediaDevices[type==='camera'?'getUserMedia':'getDisplayMedia']({ video: true, audio: type==='camera' });
+                    video.srcObject = localMediaStream; await video.play();
+                    video.classList.remove('hidden'); localMediaStream.getVideoTracks()[0].onended = stopTeacherBroadcast;
+                } else if(type === 'whiteboard') {
+                    video.classList.add('hidden'); wbCanvas.classList.remove('hidden'); wbCtrls.classList.remove('hidden'); clearWhiteboard(); 
+                }
+
+                placeholder.classList.add('hidden'); document.getElementById('t-btn-stop').classList.remove('hidden'); isBroadcasting = true;
+
+                const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                if(broadcastInterval) clearInterval(broadcastInterval);
+                broadcastInterval = setInterval(() => {
+                    if(!isBroadcasting) return;
+                    if(isWhiteboardActive) {
+                        sendMsg('TEACHER_FRAME', { image: wbCanvas.toDataURL('image/jpeg', 0.5) });
+                    } else if(video.videoWidth > 0) {
+                        canvas.width = type === 'screen' ? 640 : 320; canvas.height = (video.videoHeight / video.videoWidth) * canvas.width;
+                        ctx.drawImage(video, 0, 0, canvas.width, canvas.height); sendMsg('TEACHER_FRAME', { image: canvas.toDataURL('image/jpeg', 0.2) });
+                    }
+                }, 250); 
+            } catch(e) { showToast('error', 'Failed to share media.'); }
+        }
+
+        function stopTeacherBroadcast() {
+            if(localMediaStream) localMediaStream.getTracks().forEach(t => t.stop());
+            isBroadcasting = false; isWhiteboardActive = false; clearInterval(broadcastInterval);
+            document.getElementById('teacher-preview-video').classList.add('hidden'); document.getElementById('whiteboard-canvas').classList.add('hidden'); document.getElementById('wb-controls').classList.add('hidden');
+            document.getElementById('teacher-placeholder').classList.remove('hidden'); document.getElementById('t-btn-stop').classList.add('hidden');
+            sendMsg('TEACHER_STOPPED', {});
+        }
+
+        function switchTeacherTab(tabName) {
+            document.querySelectorAll('.t-nav-btn').forEach(b => {
+                b.classList.remove('bg-brand-500/10', 'text-brand-600', 'dark:text-brand-400'); b.classList.add('theme-text-muted', 'hover:bg-gray-100', 'dark:hover:bg-dark-700');
+            });
+            const activeBtn = document.querySelector(`.t-nav-btn[data-target="${tabName}"]`);
+            if(activeBtn) { activeBtn.classList.add('bg-brand-500/10', 'text-brand-600', 'dark:text-brand-400'); activeBtn.classList.remove('theme-text-muted', 'hover:bg-gray-100', 'dark:hover:bg-dark-700'); }
+            ['live', 'classroom', 'students', 'analytics'].forEach(t => document.getElementById(`tab-${t}`).classList.add('hidden'));
+            document.getElementById(`tab-${tabName}`).classList.remove('hidden');
+        }
+
+        function handleStudentSync(payload) {
+            const isNew = !AppState.students.has(payload.id); AppState.students.set(payload.id, payload);
+            updateTeacherStudentsTable(); updateClassroomGrid(); updateTeacherCounters(); updateAnalyticsDashboard();
+            if(isNew) showToast('info', `${payload.name} joined.`);
+        }
+        function handleStudentLeave(payload) { 
+            AppState.students.delete(payload.id); updateTeacherStudentsTable(); updateClassroomGrid(); updateTeacherCounters(); updateAnalyticsDashboard();
+            showToast('warning', `${payload.name} left.`); 
+        }
+        
+        function updateTeacherCounters() {
+            let total = 0; let hands = 0; AppState.students.forEach(st => { if(st.status === 'active') { total++; if(st.handRaised) hands++; } });
+            document.getElementById('hdr-total-st').innerText = total; document.getElementById('hdr-hands').innerText = hands;
+            const badge = document.getElementById('hand-raise-badge');
+            if(hands > 0) { badge.innerText = hands; badge.classList.remove('hidden'); } else badge.classList.add('hidden');
+        }
+
+        function updateTeacherStudentsTable() {
+            const tbody = document.getElementById('student-list-body'); tbody.innerHTML = '';
+            if (AppState.students.size === 0) return tbody.innerHTML = `<tr><td colspan="6" class="p-8 text-center theme-text-muted">Awaiting enrollments...</td></tr>`;
+            AppState.students.forEach(st => {
+                const tr = document.createElement('tr');
+                tr.innerHTML = `<td class="p-4 theme-border border-b"><div class="font-bold theme-text-main">${st.name}</div><div class="text-[11px] theme-text-muted font-medium">ID: ${st.roll}</div></td><td class="p-4 theme-border border-b font-bold ${st.status === 'active' ? 'text-green-500' : 'text-red-500'} uppercase text-xs text-center">${st.status} ${st.exempt ? '<br><span class="text-[9px] bg-blue-100 text-blue-600 dark:bg-blue-900/30 dark:text-blue-400 px-1.5 py-0.5 rounded mt-1 inline-block">EXEMPT</span>' : ''}</td><td class="p-4 theme-border border-b text-center text-lg"><i class="fa-solid fa-video ${st.camOn ? 'text-green-500' : 'text-gray-400'}"></i> <i class="fa-solid fa-microphone ${st.micOn ? 'text-green-500' : 'text-gray-400'} ml-2"></i> <i class="fa-solid fa-face-smile ${st.faceDetected ? 'text-blue-500' : 'text-gray-400'} ml-2"></i></td><td class="p-4 theme-border border-b text-center"><div class="w-full bg-gray-200 dark:bg-gray-700 rounded-full h-2 mb-1"><div class="bg-brand-500 h-2 rounded-full" style="width: ${st.engagement}%"></div></div><span class="text-xs font-bold theme-text-main">${Math.round(st.engagement)}%</span></td><td class="p-4 theme-border border-b text-center font-mono font-black text-brand-500">${Math.round(st.points)} XP</td><td class="p-4 theme-border border-b text-right">${st.status === 'active' ? `<button onclick="kickStudent('${st.id}')" class="px-3 py-1.5 bg-red-100 dark:bg-red-900/30 text-red-600 dark:text-red-400 hover:bg-red-500 hover:text-white rounded-lg text-xs font-bold">Kick</button>` : `<span class="text-xs text-gray-500 font-bold">Revoked</span>`}</td>`;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function updateClassroomGrid() {
+            const gridId = AppState.role === 'teacher' ? 'teacher-class-grid' : 'student-class-grid';
+            const grid = document.getElementById(gridId);
+            if(AppState.students.size === 0) { grid.innerHTML = `<div class="col-span-full text-center theme-text-muted py-10 font-medium">No students connected.</div>`; return; }
+            if(grid.innerHTML.includes('No students')) grid.innerHTML = '';
+
+            AppState.students.forEach(st => {
+                if(st.status !== 'active') { const el = document.getElementById(`grid-card-${st.id}`); if(el) el.remove(); return; }
+                let card = document.getElementById(`grid-card-${st.id}`);
+                if(!card) {
+                    card = document.createElement('div'); card.id = `grid-card-${st.id}`;
+                    card.className = "flex flex-col items-center bg-white dark:bg-dark-800 p-4 rounded-2xl border theme-border shadow-sm relative transition-all hover:shadow-md";
+                    grid.appendChild(card);
+                }
+
+                let tHtml = AppState.role === 'teacher' ? `<div class="flex justify-center gap-1 mt-2 w-full border-t theme-border pt-2"><button onclick="issueTeacherGrade('${st.id}', 10)" class="text-[9px] bg-green-100 dark:bg-green-900/30 hover:bg-green-500 text-green-600 dark:text-green-400 hover:text-white font-bold px-2 py-1 rounded transition flex-1">Right (+10)</button><button onclick="issueTeacherGrade('${st.id}', 5)" class="text-[9px] bg-yellow-100 dark:bg-yellow-900/30 hover:bg-yellow-500 text-yellow-600 dark:text-yellow-400 hover:text-white font-bold px-2 py-1 rounded transition flex-1">Part (+5)</button></div>` : '';
+                let hBadge = st.handRaised ? `<div class="absolute -top-3 -right-3 w-8 h-8 bg-yellow-400 text-white rounded-full flex items-center justify-center shadow-lg border-2 border-white dark:border-dark-800 animate-bounce text-sm"><i class="fa-solid fa-hand"></i></div>` : '';
+                
+                let imgSrc = st.lastFrame ? st.lastFrame : "https://placehold.co/100x100/1e293b/475569?text=Off";
+                if(!st.camOn && !st.exempt) imgSrc = "https://placehold.co/100x100/f3f4f6/ef4444?text=Off";
+                if(!st.camOn && st.exempt) imgSrc = "https://placehold.co/100x100/f3f4f6/3b82f6?text=Exempt";
+
+                card.innerHTML = `<div class="absolute top-2 left-2 text-[10px] font-black text-brand-500 bg-brand-50 dark:bg-brand-900/20 px-2 py-0.5 rounded-md border border-brand-200 dark:border-brand-800/50" id="grid-pts-${st.id}">${Math.round(st.points)} XP</div>${st.exempt ? '<div class="absolute top-2 right-2 text-[10px] font-bold text-blue-500 bg-blue-50 dark:bg-blue-900/20 px-2 py-0.5 rounded-md border border-blue-200 dark:border-blue-800/50">EXEMPT</div>' : ''}${hBadge}<div class="relative mb-2 mt-4"><img id="grid-img-${st.id}" src="${imgSrc}" class="participant-avatar ${st.camOn ? 'mirrored-image' : ''}"><div id="grid-mic-${st.id}" class="absolute bottom-0 right-0 w-6 h-6 bg-white dark:bg-dark-700 rounded-full border-2 border-gray-200 dark:border-gray-600 flex items-center justify-center text-[10px] shadow-sm"><i class="fa-solid fa-microphone-slash text-red-500"></i></div></div><span class="font-bold text-sm truncate w-full text-center theme-text-main">${st.name}</span><div class="flex gap-2 mt-1 text-xs mb-1"><i id="grid-cam-icon-${st.id}" class="fa-solid fa-video ${st.camOn ? 'text-green-500' : 'text-gray-400'}"></i> <i id="grid-face-icon-${st.id}" class="fa-solid fa-face-smile ${st.faceDetected ? 'text-blue-500' : 'text-gray-400'}"></i></div>${tHtml}`;
+
+                const img = document.getElementById(`grid-img-${st.id}`), micBadge = document.getElementById(`grid-mic-${st.id}`);
+                micBadge.innerHTML = st.micOn ? `<i class="fa-solid fa-microphone text-green-500"></i>` : `<i class="fa-solid fa-microphone-slash text-red-500"></i>`;
+                if(st.isSpeaking && st.micOn) img.classList.add('speaking-ring'); else img.classList.remove('speaking-ring');
+                if(st.handRaised) card.classList.add('ring-2', 'ring-yellow-400', 'bg-yellow-50', 'dark:bg-yellow-900/10');
+                else card.classList.remove('ring-2', 'ring-yellow-400', 'bg-yellow-50', 'dark:bg-yellow-900/10');
+            });
+        }
+        function updateStudentGridFrame(id, base64Data) { const img = document.getElementById(`grid-img-${id}`); if(img && AppState.students.get(id)?.camOn) img.src = base64Data; }
+
+        // ================= POLLS =================
+        function togglePoll() { if(!AppState.activePoll.isActive) openPollSetup(); else finishActivePoll(); }
+        function openPollSetup() { document.getElementById('teacher-poll-modal').classList.remove('hidden'); }
+        function closePollSetup() { document.getElementById('teacher-poll-modal').classList.add('hidden'); }
+        function startCustomPoll() {
+            AppState.activePoll.isActive = true; AppState.activePoll.question = document.getElementById('poll-setup-q').value || 'Opinion Poll';
+            AppState.activePoll.options = {A: document.getElementById('poll-setup-a').value||'A', B: document.getElementById('poll-setup-b').value||'B', C: document.getElementById('poll-setup-c').value||'C', D: document.getElementById('poll-setup-d').value||'D'};
+            AppState.activePoll.correctAns = document.getElementById('poll-setup-ans').value; AppState.activePoll.votes = {A:0, B:0, C:0, D:0}; AppState.activePoll.totalVotes = 0;
+            AppState.classStats.totalPolls++; sendMsg('POLL_START', { poll: AppState.activePoll }); closePollSetup();
+            
+            const btn = document.getElementById('btn-quick-poll'); btn.innerHTML = '<i class="fa-solid fa-stop-circle mr-1"></i> Finish Poll';
+            btn.classList.replace('bg-blue-100', 'bg-red-500'); btn.classList.replace('text-blue-600', 'text-white'); btn.classList.replace('dark:bg-blue-900/30', 'dark:bg-red-600'); btn.classList.replace('dark:text-blue-400', 'dark:text-white');
+        }
+        function finishActivePoll() {
+            AppState.activePoll.isActive = false; sendMsg('POLL_RESULTS', { poll: AppState.activePoll });
+            const btn = document.getElementById('btn-quick-poll'); btn.innerHTML = '<i class="fa-solid fa-square-poll-vertical mr-1"></i> Quick Poll';
+            btn.classList.replace('bg-red-500', 'bg-blue-100'); btn.classList.replace('text-white', 'text-blue-600'); btn.classList.replace('dark:bg-red-600', 'dark:bg-blue-900/30'); btn.classList.replace('dark:text-white', 'dark:text-blue-400');
+            updateAnalyticsDashboard(); // Update analytics when poll ends
+        }
+        function handlePollStart(payload) {
+            const p = payload.poll; document.getElementById('poll-q-text').innerText = p.question;
+            ['A','B','C','D'].forEach(opt => document.getElementById(`btn-opt-${opt}`).innerText = p.options[opt]);
+            document.getElementById('poll-options-container').classList.remove('hidden'); document.getElementById('poll-waiting-msg').classList.add('hidden');
+            document.getElementById('poll-modal').classList.remove('hidden'); document.getElementById('poll-results-modal').classList.add('hidden');
+        }
+        function submitPoll(choice) {
+            sendMsg('POLL_VOTE', { choice: choice }); AppState.me.pollsAnswered++; AppState.me.points += 20; syncStudentState(); showToast('success', 'Response recorded!');
+            document.getElementById('poll-options-container').classList.add('hidden'); document.getElementById('poll-waiting-msg').classList.remove('hidden');
+        }
+        function handlePollVote(payload) { 
+            if(AppState.activePoll.isActive) { 
+                AppState.activePoll.votes[payload.choice]++; AppState.activePoll.totalVotes++; AppState.classStats.pollAnswers.push(payload.choice); 
+                updateAnalyticsDashboard(); // real-time updates for teacher
+            } 
+        }
+        function handlePollResults(payload) {
+            document.getElementById('poll-modal').classList.add('hidden'); 
+            const p = payload.poll; document.getElementById('poll-res-q-text').innerText = p.question;
+            const container = document.getElementById('poll-results-content'); container.innerHTML = '';
+            const total = p.totalVotes || 1; 
+            ['A','B','C','D'].forEach(opt => {
+                let count = p.votes[opt]; let pct = Math.round((count/total)*100); let isCorrect = (p.correctAns === opt);
+                let colorClass = isCorrect ? 'bg-green-500' : 'bg-brand-500'; if(p.correctAns !== 'none' && !isCorrect) colorClass = 'bg-gray-400 dark:bg-gray-600'; 
+                let checkMark = isCorrect ? '<i class="fa-solid fa-check-circle text-green-500 ml-2"></i>' : '';
+                container.innerHTML += `<div class="flex flex-col mb-1"><div class="flex justify-between text-sm font-bold theme-text-main mb-1"><span>${opt}: ${p.options[opt]} ${checkMark}</span><span>${pct}% (${count})</span></div><div class="w-full bg-gray-200 dark:bg-dark-700 rounded-full h-3"><div class="${colorClass} h-3 rounded-full transition-all" style="width: ${pct}%"></div></div></div>`;
+            });
+            document.getElementById('poll-results-modal').classList.remove('hidden');
+        }
+        function closePollResults() { document.getElementById('poll-results-modal').classList.add('hidden'); }
+
+        // ================= TEACHER END CLASS =================
+        document.getElementById('end-class-btn').addEventListener('click', () => {
+            if(!confirm("Are you sure you want to end the class?")) return;
+            stopTeacherBroadcast(); sendMsg('CLASS_ENDED_CMD', {}); 
+            
+            updateAnalyticsDashboard();
+
+            document.querySelectorAll('.t-nav-btn').forEach(btn => { if(btn.dataset.target !== 'analytics') btn.classList.add('hidden'); });
+            document.getElementById('teacher-sidebar-actions').classList.add('hidden'); document.getElementById('teacher-header-actions').classList.add('hidden'); 
+            document.getElementById('live-indicator').innerHTML = '<i class="fa-solid fa-circle-check text-[8px] mr-1"></i>Ended'; document.getElementById('live-indicator').classList.replace('bg-red-500', 'bg-gray-500');
+            document.getElementById('analytics-ended-banner').classList.replace('hidden', 'flex');
+            document.getElementById('take-another-class-wrapper').classList.remove('hidden');
+            
+            switchTeacherTab('analytics'); showToast('info', 'Class Ended. Final report generated.');
+        });
+        function takeAnotherClass() { localStorage.removeItem('activeClassCode'); location.reload(); }
+
+        // ================= STUDENT LOGIC =================
+        function handleStudentClassEnded() {
+            saveProfileData(); localStorage.removeItem('activeClassCode'); 
+            if(localMediaStream) localMediaStream.getTracks().forEach(t=>t.stop());
+            clearInterval(faceDetectionInterval); clearInterval(pointLoopInterval); clearInterval(audioLevelInterval); clearInterval(heartbeatInterval);
+            if(faceMissingTimer) clearInterval(faceMissingTimer);
+            AppState.me.status = 'ended'; showToast('info', "Class Session Ended. Progress saved.");
+            const statEl = document.getElementById('st-connection-status'); statEl.innerHTML = '<i class="fa-solid fa-circle-xmark mr-1"></i> Ended'; statEl.classList.replace('text-green-500', 'text-gray-500'); statEl.classList.remove('animate-pulse');
+            document.querySelector('.s-nav-btn[data-target="presentation"]').classList.add('hidden'); document.querySelector('.s-nav-btn[data-target="leaderboard"]').classList.add('hidden');
+            document.getElementById('student-action-bar').classList.add('hidden'); document.getElementById('btn-student-leave').classList.add('hidden'); document.getElementById('student-sidebar').classList.add('opacity-50', 'pointer-events-none');
+            loadStudentProfileHistory(); switchStudentTab('profile');
+        }
+
+        function switchStudentTab(tabName) {
+            document.querySelectorAll('.s-nav-btn').forEach(b => { b.classList.remove('bg-white', 'dark:bg-dark-700', 'theme-text-main', 'shadow-sm'); b.classList.add('theme-text-muted', 'hover:text-gray-800', 'dark:hover:text-white'); });
+            const activeBtn = document.querySelector(`.s-nav-btn[data-target="${tabName}"]`);
+            if(activeBtn) { activeBtn.classList.add('bg-white', 'dark:bg-dark-700', 'theme-text-main', 'shadow-sm'); activeBtn.classList.remove('theme-text-muted', 'hover:text-gray-800', 'dark:hover:text-white'); }
+            ['presentation', 'leaderboard', 'profile'].forEach(t => document.getElementById(`s-tab-${t}`).classList.add('hidden'));
+            document.getElementById(`s-tab-${tabName}`).classList.remove('hidden');
+            if(tabName === 'leaderboard') updateLeaderboard();
+        }
+
+        function updateLeaderboard() {
+            if(AppState.role !== 'student') return;
+            const list = document.getElementById('st-leaderboard-list'); let stArr = Array.from(AppState.students.values());
+            if(!stArr.find(s => s.id === AppState.me.id)) stArr.push(AppState.me); stArr.sort((a, b) => b.points - a.points);
+            if(stArr.length === 0) return; list.innerHTML = '';
+            stArr.forEach((st, index) => {
+                let isMe = st.id === AppState.me.id;
+                let rankIcon = (index === 0) ? '<i class="fa-solid fa-medal text-yellow-500 text-2xl"></i>' : (index === 1) ? '<i class="fa-solid fa-medal text-gray-400 text-2xl"></i>' : (index === 2) ? '<i class="fa-solid fa-medal text-amber-700 text-2xl"></i>' : `<span class="font-bold text-lg text-gray-400 w-6 inline-block text-center">${index+1}</span>`;
+                list.innerHTML += `<li class="p-4 flex items-center justify-between ${isMe ? 'bg-brand-50 dark:bg-brand-900/10' : ''}"><div class="flex items-center gap-4">${rankIcon}<span class="font-bold theme-text-main text-lg">${st.name} ${isMe ? '<span class="text-[10px] bg-brand-500 text-white px-2 py-0.5 rounded-full ml-2">YOU</span>' : ''}</span></div><div class="font-black text-brand-500 text-xl">${Math.round(st.points)} XP</div></li>`;
+            });
+        }
+
+        function loadStudentProfileHistory() {
+            let data = localStorage.getItem('your_classroom_profile');
+            if(data) {
+                try {
+                    let profile = JSON.parse(data); document.getElementById('prof-total-xp').innerText = Math.round(profile.totalXP || 0); document.getElementById('prof-total-classes').innerText = profile.history ? profile.history.length : 0;
+                    const list = document.getElementById('prof-history-list');
+                    if(profile.history && profile.history.length > 0) {
+                        list.innerHTML = ''; profile.history.slice().reverse().slice(0, 5).forEach(h => { list.innerHTML += `<tr><td class="p-4">${h.date}</td><td class="p-4 font-mono font-bold text-brand-500">${h.code}</td><td class="p-4 text-center">${Math.round(h.eng)}%</td><td class="p-4 text-right font-bold">+${Math.round(h.xp)}</td></tr>`; });
+                    }
+                } catch(e) {}
+            }
+        }
+        function saveProfileData() {
+            if(AppState.role !== 'student') return;
+            let data = localStorage.getItem('your_classroom_profile'), profile = data ? JSON.parse(data) : { totalXP: 0, history: [] };
+            profile.totalXP += AppState.me.points; profile.history.push({ date: new Date().toLocaleDateString(), code: AppState.roomCode, eng: AppState.me.engagement, xp: AppState.me.points });
+            localStorage.setItem('your_classroom_profile', JSON.stringify(profile));
+        }
+
+        function syncStudentState() {
+            if(AppState.role !== 'student') return;
+            sendMsg('STUDENT_SYNC', { ...AppState.me });
+            document.getElementById('st-xp-display').innerText = Math.round(AppState.me.points); document.getElementById('st-eng-display').innerText = `${Math.round(AppState.me.engagement)}%`; document.getElementById('st-warnings-display').innerText = `${AppState.me.violations}/${MAX_VIOLATIONS}`;
+            const cBtn = document.getElementById('st-cam-btn'), mBtn = document.getElementById('st-mic-btn');
+            cBtn.innerHTML = AppState.me.camOn ? '<i class="fa-solid fa-video"></i>' : '<i class="fa-solid fa-video-slash"></i>'; cBtn.className = `w-12 h-12 rounded-xl flex items-center justify-center text-white transition shadow-lg tooltip ${AppState.me.camOn?'bg-gray-700 hover:bg-gray-600':'bg-red-500 hover:bg-red-400'}`;
+            mBtn.innerHTML = AppState.me.micOn ? '<i class="fa-solid fa-microphone"></i>' : '<i class="fa-solid fa-microphone-slash"></i>'; mBtn.className = `w-12 h-12 rounded-xl flex items-center justify-center text-white transition shadow-lg tooltip ${AppState.me.micOn?'bg-gray-700 hover:bg-gray-600':'bg-red-500 hover:bg-red-400'}`;
+            const overlay = document.getElementById('st-cam-overlay'), msg = document.getElementById('st-overlay-msg');
+            if(!AppState.me.camOn) {
+                overlay.classList.remove('hidden');
+                if(AppState.me.exempt) { msg.innerHTML = "Camera Exempted<br><span class='text-[9px]'>No XP Penalty</span>"; msg.className = "text-xs font-bold text-center px-4 bg-blue-500/20 text-blue-300 py-1 rounded-xl border border-blue-500/50"; }
+                else { msg.innerHTML = "Camera OFF<br><span class='text-[9px]'>XP Loss Active</span>"; msg.className = "text-xs font-bold text-center px-4 bg-red-500/20 text-red-300 py-1 rounded-xl border border-red-500/50"; }
+            } else { overlay.classList.add('hidden'); }
+            if(AppState.me.exempt) document.getElementById('btn-request-exempt').classList.add('hidden');
+            
+            const badgeContainer = document.getElementById('prof-badges'); let badges = [];
+            if(AppState.me.points > 100) badges.push({icon: 'fa-fire', color: 'text-orange-500', name: 'On Fire'});
+            if(AppState.me.chatMessages > 5) badges.push({icon: 'fa-comments', color: 'text-blue-500', name: 'Chatter'});
+            if(AppState.me.pollsAnswered > 0) badges.push({icon: 'fa-check-double', color: 'text-green-500', name: 'Voter'});
+            badgeContainer.innerHTML = ''; badges.forEach(b => badgeContainer.innerHTML += `<div class="bg-white dark:bg-dark-800 border theme-border px-2 py-1 rounded-md text-[10px] font-bold theme-text-main shadow-sm flex items-center gap-1 badge-anim"><i class="fa-solid ${b.icon} ${b.color}"></i> ${b.name}</div>`);
+            
+            for(let i=1; i<=3; i++) { const dot = document.getElementById(`warn-${i}`); if(i <= AppState.me.violations) { dot.classList.add('bg-red-500'); dot.classList.remove('bg-gray-300', 'dark:bg-gray-600'); } else { dot.classList.remove('bg-red-500'); dot.classList.add('bg-gray-300', 'dark:bg-gray-600'); } }
+        }
+
+        // ================= STUDENT SENSORS & GAME LOOP =================
+        async function startStudentSystems() {
+            try {
+                document.getElementById('st-loading-text').innerText = "Requesting Camera...";
+                localMediaStream = await navigator.mediaDevices.getUserMedia({ video: { width: 320, height: 240 }, audio: true });
+                const videoEl = document.getElementById('st-webcam'); videoEl.srcObject = localMediaStream; AppState.me.camOn = true;
+                localMediaStream.getAudioTracks().forEach(t => t.enabled = false);
+                
+                if(!audioContext) audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                analyser = audioContext.createAnalyser(); analyser.fftSize = 256; audioContext.createMediaStreamSource(localMediaStream).connect(analyser);
+                const dataArray = new Uint8Array(analyser.frequencyBinCount);
+                audioLevelInterval = setInterval(() => {
+                    if(!AppState.me.micOn) { AppState.me.isSpeaking = false; return; }
+                    analyser.getByteFrequencyData(dataArray); let sum = 0; for(let i=0; i<dataArray.length; i++) sum += dataArray[i];
+                    const wasSpeaking = AppState.me.isSpeaking; AppState.me.isSpeaking = (sum / dataArray.length) > 20; 
+                    if(wasSpeaking !== AppState.me.isSpeaking) syncStudentState();
+                }, 200);
+
+                try { await faceapi.nets.tinyFaceDetector.loadFromUri('https://cdn.jsdelivr.net/gh/justadudewhohacks/face-api.js@master/weights'); isAiLoaded = true; document.getElementById('ai-status-badge').innerHTML = 'AI Active'; document.getElementById('ai-status-badge').className = 'text-[9px] bg-green-500/20 text-green-500 px-2 py-0.5 rounded-full font-bold uppercase'; } 
+                catch(e) { document.getElementById('ai-status-badge').innerText = 'AI Failed'; document.getElementById('ai-status-badge').className = 'text-[9px] bg-red-500/20 text-red-500 px-2 py-0.5 rounded-full font-bold uppercase'; }
+
+                videoEl.onplay = () => { if(faceDetectionInterval) clearInterval(faceDetectionInterval); faceDetectionInterval = setInterval(runFaceDetection, 400); };
+                try { await videoEl.play(); } catch(e) {}
+
+                const canvas = document.createElement('canvas'); const ctx = canvas.getContext('2d', { willReadFrequently: true });
+                setInterval(() => {
+                    if(AppState.me.status === 'active' && AppState.me.camOn && videoEl.videoWidth > 0) {
+                        canvas.width = 100; canvas.height = 100; const minDim = Math.min(videoEl.videoWidth, videoEl.videoHeight);
+                        ctx.drawImage(videoEl, (videoEl.videoWidth - minDim) / 2, (videoEl.videoHeight - minDim) / 2, minDim, minDim, 0, 0, canvas.width, canvas.height);
+                        sendMsg('STUDENT_FRAME', { id: AppState.me.id, image: canvas.toDataURL('image/jpeg', 0.15) });
+                    }
+                }, 500);
+
+                pointLoopInterval = setInterval(studentGameLoop, 3000); 
+                return true;
+            } catch (err) { showToast('error', 'Camera/Mic required!'); return false; }
+        }
+
+        async function runFaceDetection() {
+            if(AppState.me.status !== 'active' || !AppState.me.camOn || !isAiLoaded) return;
+            const video = document.getElementById('st-webcam'), canvas = document.getElementById('st-overlay'), container = document.getElementById('st-video-container');
+            if(video.paused || video.ended || video.videoWidth === 0) return;
+            faceapi.matchDimensions(canvas, { width: video.videoWidth, height: video.videoHeight });
+            
+            let detections = []; try { detections = await faceapi.detectAllFaces(video, new faceapi.TinyFaceDetectorOptions({ scoreThreshold: 0.3 })); } catch(e) { return; } 
+            
+            const ctx = canvas.getContext('2d'); ctx.clearRect(0,0, canvas.width, canvas.height); ctx.save(); ctx.translate(canvas.width, 0); ctx.scale(-1, 1); 
+            
+            if(detections.length > 0) {
+                ctx.strokeStyle = '#22c55e'; ctx.lineWidth = 3; faceapi.resizeResults(detections, { width: video.videoWidth, height: video.videoHeight }).forEach(det => ctx.strokeRect(det.box.x, det.box.y, det.box.width, det.box.height));
+                if(!AppState.me.faceDetected) { AppState.me.faceDetected = true; container.classList.replace('border-gray-300','border-green-500'); container.classList.replace('dark:border-gray-700','border-green-500'); if(faceMissingTimer) { clearInterval(faceMissingTimer); faceMissingTimer = null; } syncStudentState(); }
+            } else {
+                if(AppState.me.faceDetected) {
+                    AppState.me.faceDetected = false; container.classList.replace('border-green-500','border-red-500'); syncStudentState();
+                    if(!AppState.me.exempt && !faceMissingTimer) {
+                        faceMissingTimer = setInterval(() => {
+                            if(!AppState.me.faceDetected && AppState.me.camOn && AppState.me.status === 'active') recordViolation("Face missing! Please look at the camera.");
+                            else { clearInterval(faceMissingTimer); faceMissingTimer = null; }
+                        }, 5000); 
+                    }
+                }
+            }
+            ctx.restore();
+        }
+
+        function studentGameLoop() {
+            if(AppState.me.status !== 'active') return; let ptsEarned = 0;
+            if (AppState.me.camOn && AppState.me.faceDetected && AppState.me.micOn) ptsEarned = 3.0; 
+            else if (AppState.me.camOn && AppState.me.faceDetected && !AppState.me.micOn) ptsEarned = 1.5;
+            else if (AppState.me.micOn && (!AppState.me.camOn || !AppState.me.faceDetected)) ptsEarned = 1.0;
+            if(!AppState.me.camOn && !AppState.me.exempt) ptsEarned = -1.0;
+            AppState.me.points += ptsEarned; if(AppState.me.points < 0) AppState.me.points = 0;
+            
+            const elapsed = (Date.now() - AppState.startTime) / 1000;
+            if(elapsed > 0) {
+                let chatScore = Math.min((AppState.me.chatMessages / (elapsed/360)), 1) * 20, pollScore = (AppState.me.pollsAnswered > 0 ? 1 : 0) * 20, activityScore = (elapsed > 0 ? Math.min(AppState.me.points / elapsed, 1) : 0) * 30;
+                AppState.me.engagement = chatScore + pollScore + 30 + activityScore; if(AppState.me.engagement > 100) AppState.me.engagement = 100;
+            }
+            syncStudentState();
+        }
+
+        function toggleStudentCam() { AppState.me.camOn = !AppState.me.camOn; if (localMediaStream) localMediaStream.getVideoTracks().forEach(t => t.enabled = AppState.me.camOn); if(!AppState.me.camOn) { AppState.me.faceDetected = false; if(!AppState.me.exempt) { showToast('warning', 'Camera OFF! XP will be deducted.'); recordViolation("Turned camera off without permission."); } } syncStudentState(); }
+        function toggleStudentMic() { if(audioContext && audioContext.state === 'suspended') audioContext.resume(); AppState.me.micOn = !AppState.me.micOn; if (localMediaStream) localMediaStream.getAudioTracks().forEach(t => t.enabled = AppState.me.micOn); if(!AppState.me.micOn) AppState.me.isSpeaking = false; syncStudentState(); }
+        function requestCameraExemption() { sendMsg('EXEMPT_REQUEST', { id: AppState.me.id, name: AppState.me.name }); showToast('info', 'Request sent to teacher.'); }
+        function recordViolation(reason) {
+            if(AppState.me.status !== 'active' || AppState.me.exempt) return;
+            AppState.me.violations++; AppState.me.points = Math.max(0, AppState.me.points - 10); 
+            if(AppState.me.violations >= MAX_VIOLATIONS) triggerDisqualification("Max violations (3) reached.");
+            else { showToast('error', `WARNING (${AppState.me.violations}/3): ${reason}`); syncStudentState(); }
+        }
+        function triggerDisqualification(reason) { AppState.me.status = 'disqualified'; syncStudentState(); document.getElementById('disqualify-reason').innerText = reason; document.getElementById('student-disqualified-overlay').classList.replace('hidden','flex'); if(localMediaStream) { localMediaStream.getVideoTracks().forEach(t=>t.enabled=false); localMediaStream.getAudioTracks().forEach(t=>t.enabled=false); } }
+        function requestRejoin() { const btn = document.querySelector('#student-disqualified-overlay button'); btn.innerHTML = '<div class="loader mr-2"></div> Request Sent...'; btn.disabled = true; sendMsg('REJOIN_REQUEST', { id: AppState.me.id, name: AppState.me.name, roll: AppState.me.roll, violations: AppState.me.violations }); }
+        function handleRejoinApproved() { AppState.me.status = 'active'; AppState.me.violations = 0; AppState.me.camOn = true; if(localMediaStream) localMediaStream.getVideoTracks().forEach(t=>t.enabled=true); document.getElementById('student-disqualified-overlay').classList.replace('flex','hidden'); const btn = document.querySelector('#student-disqualified-overlay button'); btn.innerHTML = '<i class="fa-solid fa-hand-paper"></i> Request to Join Again'; btn.disabled = false; syncStudentState(); showToast('success', 'Teacher accepted your request.'); }
+        function leaveClassroom() { saveProfileData(); sendMsg('STUDENT_LEAVE', { id: AppState.me.id }); location.reload(); }
+        function toggleHandRaise() { AppState.me.handRaised = !AppState.me.handRaised; const btn = document.getElementById('st-hand-btn'); if(AppState.me.handRaised) { btn.classList.replace('bg-yellow-500', 'bg-red-500'); btn.classList.replace('hover:bg-yellow-400', 'hover:bg-red-400'); btn.innerHTML = '<i class="fa-solid fa-hand-holding-hand"></i>'; showToast('info', 'Hand raised!'); } else { btn.classList.replace('bg-red-500', 'bg-yellow-500'); btn.classList.replace('hover:bg-red-400', 'hover:bg-yellow-400'); btn.innerHTML = '<i class="fa-solid fa-hand"></i>'; } sendMsg('HAND_RAISE_SYNC', { id: AppState.me.id, status: AppState.me.handRaised }); }
+
+        // ================= UI & CHAT =================
+        function updateTeacherPresentationFrame(base64) { document.getElementById('receive-teacher-placeholder').classList.add('hidden'); const img = document.getElementById('receive-teacher-frame'); img.classList.remove('hidden'); img.src = base64; }
+        function clearTeacherPresentationFrame() { document.getElementById('receive-teacher-placeholder').classList.remove('hidden'); document.getElementById('receive-teacher-frame').classList.add('hidden'); }
+        function handlePointsAwarded(points) { AppState.me.points += points; showToast('success', `Teacher awarded ${points} XP!`); syncStudentState(); }
+
+        function handleChatSubmit(e, inputId) {
+            e.preventDefault(); const input = document.getElementById(inputId); const text = input.value.trim(); if(!text) return; input.value = '';
+            const payload = { senderId: AppState.me.id, sender: AppState.me.name, role: AppState.role, text: text };
+            renderChatMessage(payload.senderId, payload.sender, payload.text, payload.role); sendMsg('CHAT_MSG', payload); 
+            if(AppState.role === 'student') { AppState.me.chatMessages++; AppState.me.points += 2; syncStudentState(); }
+        }
+        document.getElementById('teacher-chat-form').addEventListener('submit', (e) => handleChatSubmit(e, 'teacher-chat-input')); document.getElementById('student-chat-form').addEventListener('submit', (e) => handleChatSubmit(e, 'student-chat-input'));
+
+        function renderChatMessage(senderId, sender, text, role) {
+            const isMe = sender === AppState.me.name; let gradeHtml = '';
+            if (AppState.role === 'teacher' && role === 'student' && !isMe) { gradeHtml = `<div class="flex gap-1 mt-2"><button onclick="issueTeacherGrade('${senderId}', 5, this)" class="text-[9px] bg-green-500 hover:bg-green-600 text-white font-bold px-2 py-1 rounded">Right (+5)</button><button onclick="issueTeacherGrade('${senderId}', 2, this)" class="text-[9px] bg-yellow-500 hover:bg-yellow-600 text-white font-bold px-2 py-1 rounded">Partial (+2)</button><button onclick="issueTeacherGrade('${senderId}', 0, this)" class="text-[9px] bg-gray-400 hover:bg-gray-500 text-white font-bold px-2 py-1 rounded">Wrong (0)</button></div>`; }
+            const msgHtml = `<div class="flex flex-col ${isMe?'items-end':'items-start'} animate-[slideInRight_0.2s_ease-out]"><span class="text-[10px] theme-text-muted mb-0.5 mx-1 font-bold">${sender} ${role==='teacher'?'<i class="fa-solid fa-cube text-brand-500 ml-1"></i>':''}</span><div class="${isMe?'bg-brand-500 text-white':(role==='teacher'?'bg-gray-200 dark:bg-dark-700 theme-text-main border-l-2 border-brand-500':'bg-gray-100 dark:bg-dark-700 theme-text-main border theme-border')} px-3 py-2 rounded-xl text-sm max-w-[85%] break-words shadow-sm">${text}${gradeHtml}</div></div>`;
+            const tLog = document.getElementById('teacher-chat-log'), sLog = document.getElementById('student-chat-log');
+            if(tLog) { tLog.insertAdjacentHTML('beforeend', msgHtml); tLog.scrollTop = tLog.scrollHeight; } if(sLog) { sLog.insertAdjacentHTML('beforeend', msgHtml); sLog.scrollTop = sLog.scrollHeight; }
+        }
+        function issueTeacherGrade(studentId, points) { sendMsg('TEACHER_CMD', { targetId: studentId, action: 'AWARD_POINTS', points: points }); showToast('success', `Awarded ${points} XP!`); }
+
+        function showToast(type, message) {
+            const container = document.getElementById('toast-container'), toast = document.createElement('div');
+            let colors = type==='success'?'bg-green-500 text-white':type==='error'?'bg-red-500 text-white':type==='warning'?'bg-yellow-500 text-white':'bg-white dark:bg-dark-800 theme-text-main border theme-border';
+            let icon = type==='success'?'fa-check-circle':type==='error'?'fa-triangle-exclamation':type==='warning'?'fa-bell':'fa-info-circle text-brand-500';
+            toast.className = `toast-enter flex items-center gap-3 px-4 py-3 rounded-xl shadow-xl ${colors} min-w-[250px] z-50 font-medium text-sm`;
+            toast.innerHTML = `<i class="fa-solid ${icon} text-lg"></i> <span class="flex-1">${message}</span>`;
+            container.appendChild(toast); setTimeout(() => { toast.classList.replace('toast-enter', 'toast-leave'); setTimeout(() => toast.remove(), 300); }, 4000);
+        }
+        function showModal(htmlContent, buttons = []) {
+            const overlay = document.getElementById('modal-overlay'), content = document.getElementById('modal-content');
+            let btnsHtml = buttons.map((b, i) => `<button id="mbtn-${i}" class="px-5 py-2.5 rounded-xl font-bold transition ${b.class}">${b.text}</button>`).join('');
+            content.innerHTML = `<div class="text-center">${htmlContent}<div class="flex justify-center gap-3 mt-8">${btnsHtml}</div></div>`;
+            buttons.forEach((b, i) => document.getElementById(`mbtn-${i}`).addEventListener('click', () => { if(b.onClick) b.onClick(); closeModal(); })); overlay.classList.remove('hidden');
+        }
+        function closeModal() { document.getElementById('modal-overlay').classList.add('hidden'); }
+    </script>
+</body>
+</html>
